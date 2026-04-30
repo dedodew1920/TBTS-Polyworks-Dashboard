@@ -22,7 +22,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Configuration ---
-# ✅ แก้ไข URL ให้พร้อมสำหรับการ Download โดยตรง
 SHAREPOINT_URL = "https://tbtsonline.sharepoint.com/sites/TBTS-Engineering/Shared%20Documents/PRODUCT%20LIST/004)%20Software/PolyWorks/my%20dashboard/Polyworks%20Contract.xlsx?download=1"
 DB_NAME = "polyworks_data.db"
 SHEET_NAME = "PolyWorks MA Contract"
@@ -30,18 +29,14 @@ SHEET_NAME = "PolyWorks MA Contract"
 # --- Functions ---
 
 def sync_db_from_excel():
-    """ดึงข้อมูลจาก SharePoint และบันทึกลง SQLite DB"""[cite: 1]
     try:
         response = requests.get(SHAREPOINT_URL)
         if response.status_code == 200:
             if os.path.exists(DB_NAME): os.remove(DB_NAME)
-            
-            # อ่านจาก Excel (เริ่มที่แถว 3 ตาม Header=2)
-            df = pd.read_excel(io.BytesIO(response.content), sheet_name=SHEET_NAME, header=2)[cite: 1]
+            df = pd.read_excel(io.BytesIO(response.content), sheet_name=SHEET_NAME, header=2)
             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-            
             conn = sqlite3.connect(DB_NAME)
-            df.to_sql("data", conn, if_exists="replace", index=False)[cite: 1]
+            df.to_sql("data", conn, if_exists="replace", index=False)
             conn.close()
             return True
         else:
@@ -52,31 +47,27 @@ def sync_db_from_excel():
         return False
 
 def load_data():
-    """โหลดข้อมูลจาก SQLite DB"""[cite: 1]
     if not os.path.exists(DB_NAME): 
         sync_db_from_excel()
-    
     if os.path.exists(DB_NAME):
         conn = sqlite3.connect(DB_NAME)
-        df = pd.read_sql("SELECT * FROM data", conn)[cite: 1]
+        df = pd.read_sql("SELECT * FROM data", conn)
         conn.close()
         return df
     return pd.DataFrame()
 
 def save_data(df_to_save):
-    """บันทึกข้อมูลที่แก้ไขกลับลง DB"""[cite: 1]
     conn = sqlite3.connect(DB_NAME)
     full_df = pd.read_sql("SELECT * FROM data", conn)
     full_df.update(df_to_save)
     new_rows = df_to_save[~df_to_save.index.isin(full_df.index)]
     if not new_rows.empty:
         full_df = pd.concat([full_df, new_rows], ignore_index=True)
-    full_df.to_sql("data", conn, if_exists="replace", index=False)[cite: 1]
+    full_df.to_sql("data", conn, if_exists="replace", index=False)
     conn.close()
 
 @st.cache_data
 def get_coords_optimized(lat_val, lon_val, url_map):
-    """แปลงพิกัดจากค่าในตารางหรือ Google Maps URL"""[cite: 1]
     if pd.notna(lat_val):
         val_str = str(lat_val).strip()
         if "," in val_str:
@@ -94,7 +85,6 @@ def get_coords_optimized(lat_val, lon_val, url_map):
     return None, None
 
 def get_status_color(status_val):
-    """กำหนดสีตามสถานะสัญญา"""[cite: 1]
     return '#FF4B4B' if 'expired' in str(status_val).lower() else '#00C49A'
 
 # --- 🚀 Main Logic ---
@@ -103,24 +93,21 @@ df = load_data()
 
 # --- Sidebar ---
 st.sidebar.header("🔍 ค้นหาและตัวกรอง")
-display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])[cite: 1]
+display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])
 
 if not df.empty:
-    # สร้างรายการค้นหาจาก Company, Division, DongleNo.
     suggestions = sorted(list(set(
         df['Company'].dropna().astype(str).unique().tolist() + 
         df['Division'].dropna().astype(str).unique().tolist() + 
         df['DongleNo.'].dropna().astype(str).unique().tolist()
     )))
     search_query = st.sidebar.selectbox("🎯 ค้นหา", options=[""] + suggestions, index=0)
-    
     all_statuses = sorted(df['Status'].dropna().unique().tolist())
     selected_statuses = st.sidebar.multiselect("🚦 สถานะสัญญา", options=all_statuses)
 else:
     search_query = ""
     selected_statuses = []
 
-# Filter
 filtered_df = df.copy()
 if search_query:
     filtered_df = filtered_df[
