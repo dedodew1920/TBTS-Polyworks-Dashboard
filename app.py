@@ -47,7 +47,7 @@ def load_data():
     return df
 
 def save_data(df_to_save):
-    """บันทึกข้อมูลทั้งหมดลงใน Database โดยตรง"""[cite: 1]
+    """บันทึกข้อมูลทั้งหมดลงใน Database โดยตรง"""
     conn = sqlite3.connect(DB_NAME)
     df_to_save.to_sql("data", conn, if_exists="replace", index=False)
     conn.close()
@@ -74,13 +74,12 @@ def get_status_color(status_val):
     return '#FF4B4B' if 'expired' in str(status_val).lower() else '#00C49A'
 
 # --- Initialization ---
-df_all = load_data() # โหลดข้อมูลทั้งหมดเก็บไว้ก่อน
+df_all = load_data() 
 
 # --- Sidebar ---
 st.sidebar.header("🔍 ค้นหาและตัวกรอง")
-display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])[cite: 1]
+display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])
 
-# เตรียมข้อมูลตัวเลือกสำหรับตัวกรอง (อ้างอิงจากข้อมูลทั้งหมด)
 if not df_all.empty:
     suggestions = sorted(list(set(
         df_all['Company'].dropna().astype(str).unique().tolist() + 
@@ -96,7 +95,7 @@ else:
 selected_statuses = st.sidebar.multiselect("🚦 สถานะสัญญา", options=all_statuses)
 
 # --- 🔄 Sync Button ---
-if st.sidebar.button("🔄 Sync ข้อมูลใหม่จาก Excel", use_container_width=True):[cite: 1]
+if st.sidebar.button("🔄 Sync ข้อมูลใหม่จาก Excel", use_container_width=True):
     sync_db_from_excel()
     st.cache_data.clear() 
     st.rerun()
@@ -116,8 +115,7 @@ if selected_statuses:
 st.title("📍 Polyworks Maintenance Dashboard")
 
 # --- 📦 DISPLAY MODES ---
-if display_mode == "📦 View Mode":[cite: 1]
-    # Summary Metrics
+if display_mode == "📦 View Mode":
     if not filtered_df.empty:
         total_count = len(filtered_df)
         expired_count = len(filtered_df[filtered_df['Status'].str.lower().str.contains('expired', na=False)])
@@ -130,8 +128,7 @@ if display_mode == "📦 View Mode":[cite: 1]
 
     st.divider()
 
-    # Map Section
-    with st.expander("🗺️ แผนที่พิกัดลูกค้า", expanded=True):[cite: 1]
+    with st.expander("🗺️ แผนที่พิกัดลูกค้า", expanded=True):
         if not filtered_df.empty:
             coords = filtered_df.apply(lambda r: get_coords_optimized(r.get('Lat'), r.get('Lon'), r.get('Map')), axis=1)
             temp_df = filtered_df.copy()
@@ -140,7 +137,7 @@ if display_mode == "📦 View Mode":[cite: 1]
             
             if not map_data.empty:
                 m = folium.Map(location=[map_data['Lat_f'].mean(), map_data['Lon_f'].mean()], zoom_start=8, tiles="CartoDB positron")
-                Fullscreen(position="topright").add_to(m)[cite: 1]
+                Fullscreen(position="topright").add_to(m)
 
                 for (company, lat, lon), group in map_data.groupby(['Company', 'Lat_f', 'Lon_f']):
                     dept_html = "".join([f"<div style='border-bottom:1px solid #eee; padding:3px;'><b>{r['Division']}</b>: <span style='color:{get_status_color(r['Status'])};'>{r['Status']}</span></div>" for _, r in group.iterrows()])
@@ -151,7 +148,6 @@ if display_mode == "📦 View Mode":[cite: 1]
             else:
                 st.info("ไม่พบข้อมูลพิกัดในรายการที่เลือก")
 
-    # Details Cards
     st.subheader("📋 รายละเอียดรายแผนก")
     for idx, row in filtered_df.iterrows():
         is_expired = 'expired' in str(row['Status']).lower()
@@ -176,13 +172,12 @@ if display_mode == "📦 View Mode":[cite: 1]
 
 else: # 📝 Edit Mode
     st.subheader("📝 แก้ไขและเพิ่มข้อมูล (แสดงข้อมูลทั้งหมด)")
-    st.info("💡 ในโหมดนี้จะแสดงข้อมูลทุกแถว เพื่อให้เวลาบันทึกข้อมูลจะไม่หายไป")[cite: 1]
+    st.info("💡 ในโหมดนี้จะแสดงข้อมูลทุกแถว เพื่อให้เวลาบันทึกข้อมูลจะไม่หายไป")
     
-    # ⚠️ ใช้ df_all เสมอ เพื่อให้บันทึกแล้วข้อมูลไม่หาย
     edited_df = st.data_editor(
         df_all, 
         use_container_width=True, 
-        num_rows="dynamic", # เปิดให้เพิ่มบรรทัดใหม่ได้ด้วยปุ่ม (+)[cite: 1]
+        num_rows="dynamic",
         column_config={
             "Map": st.column_config.LinkColumn("Map Link", display_text="Open Maps 🌐"),
             "Status": st.column_config.SelectboxColumn("Status", options=all_statuses)
@@ -190,7 +185,7 @@ else: # 📝 Edit Mode
         key="main_editor"
     )
     
-    if st.button("💾 บันทึกข้อมูลลงฐานข้อมูล"):[cite: 1]
+    if st.button("💾 บันทึกข้อมูลลงฐานข้อมูล"):
         save_data(edited_df)
-        st.success("บันทึกข้อมูลเรียบร้อยแล้ว! (ข้อมูลครบถ้วน)")[cite: 1]
+        st.success("บันทึกข้อมูลเรียบร้อยแล้ว! (ข้อมูลครบถ้วน)")
         st.rerun()
