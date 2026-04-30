@@ -22,7 +22,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Configuration ---
-# ✅ ลิงก์ OneDrive ใหม่พร้อมตัวแปร ?download=1 สำหรับดึงไฟล์โดยตรง
 SHAREPOINT_URL = "https://tbtsonline-my.sharepoint.com/personal/patompong_tbts_co_th/Documents/test%20dashboard/Polyworks%20Contract.xlsx?download=1"
 DB_NAME = "polyworks_data.db"
 SHEET_NAME = "PolyWorks MA Contract"
@@ -30,32 +29,26 @@ SHEET_NAME = "PolyWorks MA Contract"
 # --- Functions ---
 
 def sync_db_from_excel():
-    """ดึงข้อมูลจาก OneDrive และบันทึกลง SQLite DB"""[cite: 1]
     try:
         response = requests.get(SHAREPOINT_URL)
         if response.status_code == 200:
             if os.path.exists(DB_NAME): os.remove(DB_NAME)
-            
-            # อ่านจาก Excel เริ่มแถวที่ 3 (header=2)
             df = pd.read_excel(io.BytesIO(response.content), sheet_name=SHEET_NAME, header=2)
             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-            
             conn = sqlite3.connect(DB_NAME)
             df.to_sql("data", conn, if_exists="replace", index=False)
             conn.close()
             return True
         else:
-            st.error(f"❌ ไม่สามารถดึงไฟล์ได้ (Error {response.status_code}) โปรดตรวจสอบการตั้งค่า Sharing")[cite: 1]
+            st.error(f"❌ ไม่สามารถดึงไฟล์ได้ (Error {response.status_code})")
             return False
     except Exception as e:
         st.error(f"⚠️ เกิดข้อผิดพลาดในการ Sync: {e}")
         return False
 
 def load_data():
-    """โหลดข้อมูลจาก SQLite DB หากไม่มีไฟล์จะสั่ง Sync อัตโนมัติ"""[cite: 1]
     if not os.path.exists(DB_NAME): 
         sync_db_from_excel()
-    
     if os.path.exists(DB_NAME):
         conn = sqlite3.connect(DB_NAME)
         df = pd.read_sql("SELECT * FROM data", conn)
@@ -64,7 +57,6 @@ def load_data():
     return pd.DataFrame()
 
 def save_data(df_to_save):
-    """บันทึกการแก้ไขใน Edit Mode ลงใน Local DB ของหน้าเว็บ"""[cite: 1]
     conn = sqlite3.connect(DB_NAME)
     full_df = pd.read_sql("SELECT * FROM data", conn)
     full_df.update(df_to_save)
@@ -76,7 +68,6 @@ def save_data(df_to_save):
 
 @st.cache_data
 def get_coords_optimized(lat_val, lon_val, url_map):
-    """ฟังก์ชันดึงพิกัดจากค่า Lat, Lon หรือ Google Maps URL"""[cite: 1]
     if pd.notna(lat_val):
         val_str = str(lat_val).strip()
         if "," in val_str:
@@ -94,7 +85,6 @@ def get_coords_optimized(lat_val, lon_val, url_map):
     return None, None
 
 def get_status_color(status_val):
-    """กำหนดสี Marker และแถบแสดงผลตามสถานะสัญญา"""[cite: 1]
     return '#FF4B4B' if 'expired' in str(status_val).lower() else '#00C49A'
 
 # --- 🚀 Main Logic ---
@@ -103,7 +93,7 @@ df = load_data()
 
 # --- Sidebar ---
 st.sidebar.header("🔍 ค้นหาและตัวกรอง")
-display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])[cite: 1]
+display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])
 
 if not df.empty:
     suggestions = sorted(list(set(
@@ -111,14 +101,13 @@ if not df.empty:
         df['Division'].dropna().astype(str).unique().tolist() + 
         df['DongleNo.'].dropna().astype(str).unique().tolist()
     )))
-    search_query = st.sidebar.selectbox("🎯 ค้นหา (บริษัท / แผนก / S/N)", options=[""] + suggestions, index=0)
+    search_query = st.sidebar.selectbox("🎯 ค้นหา", options=[""] + suggestions, index=0)
     all_statuses = sorted(df['Status'].dropna().unique().tolist())
     selected_statuses = st.sidebar.multiselect("🚦 สถานะสัญญา", options=all_statuses)
 else:
     search_query = ""
     selected_statuses = []
 
-# Filter Logic
 filtered_df = df.copy()
 if search_query:
     filtered_df = filtered_df[
@@ -129,10 +118,10 @@ if search_query:
 if selected_statuses:
     filtered_df = filtered_df[filtered_df['Status'].isin(selected_statuses)]
 
-if st.sidebar.button("🔄 Sync ข้อมูลจาก OneDrive", use_container_width=True):[cite: 1]
+if st.sidebar.button("🔄 Sync ข้อมูลจาก OneDrive", use_container_width=True):
     if sync_db_from_excel():
         st.cache_data.clear() 
-        st.success("อัปเดตข้อมูลล่าสุดเรียบร้อย!")
+        st.success("อัปเดตข้อมูลสำเร็จ!")
         st.rerun()
 
 # --- Dashboard UI ---
@@ -145,7 +134,7 @@ if not filtered_df.empty:
     
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1: st.metric("📋 ทั้งหมด", f"{total_count} รายการ")
-    with col_s2: st.metric("✅ สัญญาปกติ", f"{not_expired_count} รายการ")
+    with col_s2: st.metric("✅ ปกติ", f"{not_expired_count} รายการ")
     with col_s3: st.metric("❌ หมดอายุ", f"{expired_count} รายการ", delta=f"-{expired_count}" if expired_count > 0 else 0, delta_color="inverse")
 
 st.divider()
@@ -169,34 +158,28 @@ with st.expander("🗺️ แผนที่พิกัดลูกค้า", 
             
             st_folium(m, width="100%", height=450, key="main_map")
         else:
-            st.info("ไม่พบข้อมูลพิกัดในรายการที่เลือก")
+            st.info("ไม่พบข้อมูลพิกัด")
 
-# --- Content Display ---
-if display_mode == "📦 View Mode":[cite: 1]
-    st.subheader("📋 รายละเอียดรายแผนก")
+# --- Content ---
+if display_mode == "📦 View Mode":
     for idx, row in filtered_df.iterrows():
         is_expired = 'expired' in str(row['Status']).lower()
         st.markdown(f"""
             <div style="background-color:{'#FF4B4B' if is_expired else '#00C49A'}; padding:10px; border-radius:5px 5px 0 0; color:white; font-weight:bold;">
-                🏢 {row['Company']} | 📂 {row.get('Division','-')} | 🔑 SN: {row.get('DongleNo.','-')}
+                🏢 {row['Company']} | 📂 {row.get('Division','-')}
             </div>
         """, unsafe_allow_html=True)
-        with st.expander("แสดงรายละเอียด"):
-            c1, c2, c3 = st.columns(3)
+        with st.expander("รายละเอียด"):
+            c1, c2 = st.columns(2)
             with c1:
-                st.write(f"**ผู้ติดต่อ:** {row.get('Contact','-')}")
-                st.write(f"**เบอร์โทร:** {row.get('TEL','-')}")
-            with c2:
+                st.write(f"**S/N:** {row.get('DongleNo.','-')}")
                 st.write(f"**สิ้นสุดสัญญา:** {row.get('Expire','-')}")
-                st.write(f"**คงเหลือ:** {row.get('Remain','-')} วัน")
-            with c3:
-                map_url = row.get('Map')
-                if pd.notna(map_url):
-                    st.link_button("🚀 เปิด Google Maps", str(map_url))
-else: # Edit Mode[cite: 1]
-    st.subheader("📝 แก้ไขข้อมูลในฐานข้อมูลชั่วคราว")
+            with c2:
+                if pd.notna(row.get('Map')):
+                    st.link_button("🚀 Google Maps", str(row.get('Map')))
+else:
     edited_df = st.data_editor(filtered_df, use_container_width=True)
     if st.button("💾 บันทึกการแก้ไข"):
         save_data(edited_df)
-        st.success("บันทึกข้อมูลเรียบร้อย! (หมายเหตุ: การแก้ไขนี้จะไม่กระทบไฟล์ Excel ใน OneDrive)")[cite: 1]
+        st.success("บันทึกข้อมูลเรียบร้อย!")
         st.rerun()
