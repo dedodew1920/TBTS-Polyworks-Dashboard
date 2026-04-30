@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import Fullscreen  # ✅ เพิ่มฟังก์ชัน Fullscreen
+from folium.plugins import Fullscreen
 import requests
 import re
 import sqlite3
@@ -27,6 +27,7 @@ SHEET_NAME = "PolyWorks MA Contract"
 
 # --- Database Functions ---
 def sync_db_from_excel():
+    """ดึงข้อมูลจากไฟล์ Excel เข้าสู่ SQLite"""[cite: 1]
     try:
         if os.path.exists(DB_NAME): os.remove(DB_NAME)
         df = pd.read_excel(FILE_PATH, sheet_name=SHEET_NAME, header=2)
@@ -35,28 +36,28 @@ def sync_db_from_excel():
         df.to_sql("data", conn, if_exists="replace", index=False)
         conn.close()
         return True
-    except: return False
+    except:
+        return False
 
 def load_data():
-    if not os.path.exists(DB_NAME): sync_db_from_excel()
+    """โหลดข้อมูลจาก SQLite"""[cite: 1]
+    if not os.path.exists(DB_NAME): 
+        sync_db_from_excel()
     conn = sqlite3.connect(DB_NAME)
-    # ✅ แก้ไข SQL Syntax: SELECT * FROM data
     df = pd.read_sql("SELECT * FROM data", conn) 
     conn.close()
     return df
 
 def save_data(df_to_save):
+    """บันทึกข้อมูลทั้งหมด (รวมถึงแถวที่เพิ่มใหม่) ลง SQLite"""[cite: 1]
     conn = sqlite3.connect(DB_NAME)
-    full_df = pd.read_sql("SELECT * FROM data", conn)
-    full_df.update(df_to_save)
-    new_rows = df_to_save[~df_to_save.index.isin(full_df.index)]
-    if not new_rows.empty:
-        full_df = pd.concat([full_df, new_rows], ignore_index=True)
-    full_df.to_sql("data", conn, if_exists="replace", index=False)
+    # ใช้ if_exists="replace" เพื่อรองรับทั้งการแก้ไขและการเพิ่มแถวใหม่
+    df_to_save.to_sql("data", conn, if_exists="replace", index=False)
     conn.close()
 
 @st.cache_data
 def get_coords_optimized(lat_val, lon_val, url_map):
+    """แปลงพิกัดจากข้อมูล Lat/Lon หรือ URL"""[cite: 1]
     if pd.notna(lat_val):
         val_str = str(lat_val).strip()
         if "," in val_str:
@@ -81,23 +82,21 @@ df = load_data()
 
 # --- Sidebar ---
 st.sidebar.header("🔍 ค้นหาและตัวกรอง")
-display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])
+display_mode = st.sidebar.radio("โหมดการใช้งาน:", ["📦 View Mode", "📝 Edit Mode"])[cite: 1]
 
+# เตรียมข้อมูลสำหรับค้นหา
 if not df.empty:
     suggestions = sorted(list(set(
         df['Company'].dropna().astype(str).unique().tolist() + 
         df['Division'].dropna().astype(str).unique().tolist() + 
         df['DongleNo.'].dropna().astype(str).unique().tolist()
     )))
-    search_query = st.sidebar.selectbox(
-        "🎯 ค้นหา (ชื่อบริษัท / แผนก / SN)",
-        options=[""] + suggestions,
-        index=0
-    )
+    search_query = st.sidebar.selectbox("🎯 ค้นหา", options=[""] + suggestions, index=0)
+    all_statuses = sorted(df['Status'].dropna().unique().tolist())
 else:
     search_query = ""
+    all_statuses = []
 
-all_statuses = sorted(df['Status'].dropna().unique().tolist()) if not df.empty else []
 selected_statuses = st.sidebar.multiselect("🚦 สถานะสัญญา", options=all_statuses)
 
 # --- Filter Logic ---
@@ -111,7 +110,7 @@ if search_query:
 if selected_statuses:
     filtered_df = filtered_df[filtered_df['Status'].isin(selected_statuses)]
 
-if st.sidebar.button("🔄 Sync ข้อมูลใหม่จาก Excel", use_container_width=True):
+if st.sidebar.button("🔄 Sync ข้อมูลใหม่จาก Excel", use_container_width=True):[cite: 1]
     sync_db_from_excel()
     st.cache_data.clear() 
     st.rerun()
@@ -119,71 +118,50 @@ if st.sidebar.button("🔄 Sync ข้อมูลใหม่จาก Excel", 
 # --- Dashboard Header ---
 st.title("📍 Polyworks Maintenance Dashboard")
 
-# --- 📊 Summary Cards ---
 if not filtered_df.empty:
     total_count = len(filtered_df)
     expired_count = len(filtered_df[filtered_df['Status'].str.lower().str.contains('expired', na=False)])
     not_expired_count = total_count - expired_count
     
     col_s1, col_s2, col_s3 = st.columns(3)
-    with col_s1:
-        st.metric("📋 ทั้งหมด", f"{total_count} รายการ")
-    with col_s2:
-        st.metric("✅ ยังไม่หมดอายุ", f"{not_expired_count} รายการ")
-    with col_s3:
-        st.metric("❌ หมดอายุแล้ว", f"{expired_count} รายการ", delta=f"-{expired_count}" if expired_count > 0 else 0, delta_color="inverse")
+    with col_s1: st.metric("📋 ทั้งหมด", f"{total_count} รายการ")
+    with col_s2: st.metric("✅ ยังไม่หมดอายุ", f"{not_expired_count} รายการ")
+    with col_s3: st.metric("❌ หมดอายุแล้ว", f"{expired_count} รายการ", delta=f"-{expired_count}" if expired_count > 0 else 0, delta_color="inverse")
 
 st.divider()
 
 # --- 🗺️ Map Section ---
-with st.expander("🗺️ แผนที่พิกัดลูกค้า (สามารถขยายเต็มหน้าจอได้)", expanded=True):
-    coords = filtered_df.apply(lambda r: get_coords_optimized(r.get('Lat'), r.get('Lon'), r.get('Map')), axis=1)
+with st.expander("🗺️ แผนที่พิกัดลูกค้า", expanded=True):[cite: 1]
     if not filtered_df.empty:
+        coords = filtered_df.apply(lambda r: get_coords_optimized(r.get('Lat'), r.get('Lon'), r.get('Map')), axis=1)
         temp_df = filtered_df.copy()
         temp_df['Lat_f'], temp_df['Lon_f'] = zip(*coords)
         map_data = temp_df.dropna(subset=['Lat_f', 'Lon_f'])
         
         if not map_data.empty:
             m = folium.Map(location=[map_data['Lat_f'].mean(), map_data['Lon_f'].mean()], zoom_start=8, tiles="CartoDB positron")
-            
-            # ✅ เพิ่มฟังก์ชันขยายเต็มหน้าจอ
-            Fullscreen(
-                position="topright",
-                title="ขยายเต็มหน้าจอ",
-                title_cancel="ออกจากหน้าจอเต็ม",
-                force_separate_button=True,
-            ).add_to(m)
+            Fullscreen(position="topright").add_to(m)[cite: 1]
 
             for (company, lat, lon), group in map_data.groupby(['Company', 'Lat_f', 'Lon_f']):
-                dept_list_html = ""
-                for _, row in group.iterrows():
-                    color = get_status_color(row['Status'])
-                    dept_list_html += f"<div style='border-bottom:1px solid #eee; padding:3px;'><b>{row['Division']}</b>: <span style='color:{color};'>{row['Status']}</span></div>"
-                
-                popup_content = f"<div style='min-width:200px;'><b>🏢 {company}</b><br>{dept_list_html}</div>"
+                dept_html = "".join([f"<div style='border-bottom:1px solid #eee; padding:3px;'><b>{r['Division']}</b>: <span style='color:{get_status_color(r['Status'])};'>{r['Status']}</span></div>" for _, r in group.iterrows()])
                 marker_color = 'red' if 'expired' in group['Status'].str.lower().values else 'green'
-                folium.Marker([lat, lon], popup=folium.Popup(popup_content, max_width=300), icon=folium.Icon(color=marker_color)).add_to(m)
+                folium.Marker([lat, lon], popup=folium.Popup(f"🏢 <b>{company}</b><br>{dept_html}", max_width=300), icon=folium.Icon(color=marker_color)).add_to(m)
             
-            # แสดงแผนที่
             st_folium(m, width="100%", height=450, key="company_map")
         else:
             st.info("ไม่พบข้อมูลพิกัดในรายการที่เลือก")
 
-# --- 📦 Main Content ---
-if display_mode == "📦 View Mode":
+# --- 📦 Content Display ---
+if display_mode == "📦 View Mode":[cite: 1]
     st.subheader("📋 รายละเอียดรายแผนก")
     for idx, row in filtered_df.iterrows():
-        status_text = str(row['Status'])
-        is_expired = 'expired' in status_text.lower()
+        is_expired = 'expired' in str(row['Status']).lower()
         bg_color = "#FF4B4B" if is_expired else "#00C49A"
-        
-        header_html = f"""
-        <div style="background-color:{bg_color}; padding:10px 15px; border-radius:5px 5px 0 0; color:white; font-weight:bold; display:flex; justify-content:space-between;">
-            <span>🏢 {row['Company']} | 📂 {row.get('Division','-')}</span>
-            <span>🔑 SN: {row.get('DongleNo.','-')} | 🚦 {status_text}</span>
-        </div>
-        """
-        st.markdown(header_html, unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style="background-color:{bg_color}; padding:10px 15px; border-radius:5px 5px 0 0; color:white; font-weight:bold;">
+                🏢 {row['Company']} | 📂 {row.get('Division','-')} | 🔑 SN: {row.get('DongleNo.','-')}
+            </div>
+        """, unsafe_allow_html=True)
         with st.expander("รายละเอียด"):
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -193,23 +171,26 @@ if display_mode == "📦 View Mode":
                 st.write(f"**สิ้นสุดสัญญา:** {row.get('Expire','-')}")
                 st.write(f"**คงเหลือ:** {row.get('Remain','-')} วัน")
             with c3:
-                map_url = row.get('Map')
-                if pd.notna(map_url) and str(map_url).strip().startswith("http"):
-                    st.link_button("🚀 Google Maps", str(map_url).strip())
+                if pd.notna(row.get('Map')) and str(row.get('Map')).startswith("http"):
+                    st.link_button("🚀 Google Maps", str(row.get('Map')).strip())
         st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
 
 else: # Edit Mode
-    st.subheader("📝 แก้ไขข้อมูล")
+    st.subheader("📝 แก้ไขและเพิ่มข้อมูล")
+    # นำคอลัมน์ชั่วคราวออกก่อนแสดงผลในตาราง[cite: 1]
     df_to_edit = filtered_df.drop(columns=['Lat_f', 'Lon_f']) if 'Lat_f' in filtered_df.columns else filtered_df
+    
     edited_df = st.data_editor(
         df_to_edit, 
         use_container_width=True, 
+        num_rows="dynamic",  # ✅ เปิดให้เพิ่มแถวได้โดยการกดปุ่ม "+"[cite: 1]
         column_config={
             "Map": st.column_config.LinkColumn("Map Link", display_text="Open Maps 🌐"),
             "Status": st.column_config.SelectboxColumn("Status", options=all_statuses)
         }
     )
-    if st.button("💾 บันทึกข้อมูล"):
+    
+    if st.button("💾 บันทึกข้อมูล"):[cite: 1]
         save_data(edited_df)
-        st.success("บันทึกเรียบร้อย!")
+        st.success("บันทึกข้อมูลเรียบร้อย!")
         st.rerun()
